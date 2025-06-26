@@ -319,12 +319,10 @@ mod sched_affinity {
 // musl & ohos have additional sched_param fields that we don't support yet
 #[cfg(all(
     linux_android,
-    not(target_env = "musl"),
-    not(target_env = "ohos")
 ))]
 pub use self::sched_priority::*;
 
-#[cfg(all(linux_android, not(target_env = "musl"), not(target_env = "ohos")))]
+#[cfg(all(linux_android))]
 mod sched_priority {
     use std::mem::MaybeUninit;
 
@@ -353,9 +351,27 @@ mod sched_priority {
     }
 
     impl From<SchedParam> for libc::sched_param {
+        #[cfg(not(any(target_env = "musl", target_env = "ohos")))]
         fn from(param: SchedParam) -> Self {
             libc::sched_param {
                 sched_priority: param.sched_priority,
+            }
+        }
+
+        #[cfg(any(target_env = "musl", target_env = "ohos"))]
+        fn from(param: SchedParam) -> Self {
+            let ts_zero = libc::timespec {
+                tv_sec: 0,
+                tv_nsec: 0,
+            };
+            // musl and ohos have additional fields for SCHED_DEADLINE - this is not abstracted
+            // in this library yet.
+            libc::sched_param {
+                sched_priority: param.sched_priority,
+                sched_ss_init_budget: ts_zero.clone(),
+                sched_ss_low_priority: 0,
+                sched_ss_repl_period: ts_zero.clone(),
+                sched_ss_max_repl: 0,
             }
         }
     }
